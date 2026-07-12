@@ -53,6 +53,36 @@ Expose port 3000 with a tunnel (e.g. `ngrok http 3000`), then in the Meta app da
 
 Send a WhatsApp message to your test number and the bot replies.
 
+## Troubleshooting
+
+### Webhook verifies but no messages arrive ("shadow delivery")
+
+Meta's dashboard can verify your callback URL and subscribe you to the `messages` field while silently skipping a third required link: subscribing your **app** to your **WhatsApp Business Account (WABA)**. The dashboard's *Test* button still works (it uses Meta's internal app), which makes this extra confusing — real messages just vanish with no error anywhere.
+
+Check what's subscribed to your WABA:
+
+```bash
+curl "https://graph.facebook.com/v23.0/<WABA_ID>/subscribed_apps?access_token=<ACCESS_TOKEN>"
+```
+
+If your app isn't in the list (or only "WA DevX Webhook Events 1P App" is), subscribe it:
+
+```bash
+curl -X POST "https://graph.facebook.com/v23.0/<WABA_ID>/subscribed_apps?access_token=<ACCESS_TOKEN>"
+```
+
+Your WABA ID is shown at the top of **WhatsApp → API Setup**, or in the `granular_scopes` of `GET /debug_token?input_token=<token>&access_token=<token>`. This is a one-time, account-level fix — it survives tunnel URL changes and redeployments.
+
+### Other common causes
+
+- **`messages` field not subscribed** — webhook verification alone delivers nothing; subscribe to `messages` under Webhook fields.
+- **Expired access token** — the API Setup token lasts 24 hours; replies fail with an `OAuthException`. Use a permanent System User token (Business settings → System users) for anything longer than a quick test.
+- **Recipient not in allow-list** — the test number can only message up to 5 numbers registered in the "To" list on the API Setup page. Sends fail with error `131030`.
+- **Messages sent before setup was complete are gone** — Meta doesn't retroactively deliver; always test with a fresh message.
+- **Dev tunnel URL changed** — quick tunnels (e.g. `cloudflared tunnel --url http://localhost:3000`) get a new URL on every restart; update and re-verify the callback URL in Meta. The dev server already allows `.trycloudflare.com` hosts via `vite.server.allowedHosts` in `nuxt.config.ts`.
+
+The webhook handler logs every stage (`[webhook] received`, `[agent] reply`, `[whatsapp] send failed` with Meta's exact error body), so the dev server console tells you which link in the chain broke.
+
 ## Deployment
 
 Deploys to [Vercel](https://vercel.com/) out of the box — import the repo, add the variables from `.env.example` as environment variables, and point the Meta webhook at `https://<your-app>.vercel.app/api/whatsapp/webhook`.
