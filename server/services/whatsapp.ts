@@ -50,13 +50,21 @@ async function callGraphApi(path: string, body: Record<string, unknown>) {
 
 export async function sendTextMessage(to: string, text: string) {
   const body = text.length > MAX_TEXT_LENGTH ? `${text.slice(0, MAX_TEXT_LENGTH - 1)}…` : text
-  await callGraphApi('messages', {
-    messaging_product: 'whatsapp',
-    recipient_type: 'individual',
-    to,
-    type: 'text',
-    text: { preview_url: false, body },
-  })
+  try {
+    await callGraphApi('messages', {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to,
+      type: 'text',
+      text: { preview_url: false, body },
+    })
+  }
+  catch (error: any) {
+    // Surface the Graph API error payload — it names the exact cause
+    // (expired token, recipient not in allowed list, 24h window, …)
+    console.error('[whatsapp] send failed:', JSON.stringify(error?.data ?? String(error)))
+    throw error
+  }
 }
 
 /** Show the customer a read receipt and typing indicator while the reply is generated. */

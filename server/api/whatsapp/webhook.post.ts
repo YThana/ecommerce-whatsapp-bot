@@ -15,10 +15,12 @@ export default defineEventHandler(async (event) => {
   const rawBody = await readRawBody(event)
   const signature = getHeader(event, 'x-hub-signature-256')
   if (!rawBody || !verifyWebhookSignature(rawBody, signature, config.whatsappAppSecret)) {
+    console.error('[webhook] rejected: invalid signature (has body: %s, has header: %s)', !!rawBody, !!signature)
     throw createError({ statusCode: 401, statusMessage: 'Invalid signature' })
   }
 
   const payload = JSON.parse(rawBody) as WhatsAppWebhookPayload
+  console.log('[webhook] received:', JSON.stringify(payload))
 
   for (const entry of payload.entry ?? []) {
     for (const change of entry.changes ?? []) {
@@ -40,6 +42,8 @@ export default defineEventHandler(async (event) => {
 })
 
 async function handleMessage(message: WhatsAppTextMessage, contactName: string | undefined) {
+  console.log('[webhook] message %s from %s (type: %s)', message.id, message.from, message.type)
+
   if (message.type !== 'text' || !message.text?.body) {
     await sendTextMessage(message.from, 'Sorry, I can only read text messages for now 🙏')
     return
@@ -64,6 +68,7 @@ async function handleMessage(message: WhatsAppTextMessage, contactName: string |
     .onConflictDoNothing({ target: messages.waMessageId })
     .returning({ id: messages.id })
   if (inserted.length === 0) {
+    console.log('[webhook] duplicate delivery of %s, skipping', message.id)
     return
   }
 
@@ -80,10 +85,13 @@ async function handleMessage(message: WhatsAppTextMessage, contactName: string |
     history.map(row => ({ role: row.role, content: row.content }) satisfies ModelMessage),
   )
 
+  console.log('[agent] reply for %s: %s', message.from, reply)
+
   await db.insert(messages).values({
     customerId: customer!.id,
     role: 'assistant',
     content: reply,
   })
   await sendTextMessage(message.from, reply)
+  console.log('[webhook] reply delivered to %s', message.from)
 }
