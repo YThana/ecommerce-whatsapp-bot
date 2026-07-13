@@ -7,37 +7,15 @@ defineProps<{
 </script>
 
 <template>
-  <div class="card stat-card">
-    <span class="stat-icon" aria-hidden="true">{{ icon }}</span>
-    <div>
-      <p class="stat-value">{{ value }}</p>
-      <p class="stat-label">{{ label }}</p>
+  <UCard>
+    <div class="flex items-center gap-4">
+      <div class="flex size-11 items-center justify-center rounded-lg bg-primary/10">
+        <UIcon :name="icon" class="size-5 text-primary" />
+      </div>
+      <div>
+        <p class="text-2xl font-bold leading-tight">{{ value }}</p>
+        <p class="text-sm text-muted">{{ label }}</p>
+      </div>
     </div>
-  </div>
+  </UCard>
 </template>
-
-<style scoped>
-.stat-card {
-  display: flex;
-  align-items: center;
-  gap: 0.9rem;
-  padding: 1.1rem 1.3rem;
-}
-
-.stat-icon {
-  font-size: 1.6rem;
-}
-
-.stat-value {
-  margin: 0;
-  font-size: 1.45rem;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.stat-label {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-</style>

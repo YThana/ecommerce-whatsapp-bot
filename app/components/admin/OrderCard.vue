@@ -1,101 +1,72 @@
 <script setup lang="ts">
 import type { Order, OrderStatus } from '~/types/admin'
+import { computed, shallowRef } from 'vue'
 
-defineProps<{
+const props = defineProps<{
   order: Order
 }>()
 
 const emit = defineEmits<{
-  updateStatus: [status: OrderStatus]
+  updateStatus: [status: OrderStatus, done: () => void]
 }>()
 
-const STATUSES: OrderStatus[] = ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']
+const STATUS_ITEMS: OrderStatus[] = ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']
 
-function onStatusChange(event: Event) {
-  emit('updateStatus', (event.target as HTMLSelectElement).value as OrderStatus)
+const STATUS_COLORS: Record<OrderStatus, 'warning' | 'info' | 'primary' | 'success' | 'error'> = {
+  pending: 'warning',
+  confirmed: 'info',
+  shipped: 'primary',
+  delivered: 'success',
+  cancelled: 'error',
 }
+
+const updating = shallowRef(false)
+
+const status = computed({
+  get: () => props.order.status,
+  set: (value: OrderStatus) => {
+    updating.value = true
+    emit('updateStatus', value, () => {
+      updating.value = false
+    })
+  },
+})
 </script>
 
 <template>
-  <article class="card order-card">
-    <header class="order-header">
+  <UCard>
+    <div class="flex items-start justify-between gap-3">
       <div>
-        <h2 class="order-id">
-          Order #{{ order.id }}
-          <span class="badge" :class="`badge-${order.status}`">{{ order.status }}</span>
-        </h2>
-        <p class="order-meta">
+        <div class="flex items-center gap-2">
+          <h2 class="font-semibold">Order #{{ order.id }}</h2>
+          <UBadge :color="STATUS_COLORS[order.status]" variant="subtle" :label="order.status" />
+        </div>
+        <p class="mt-0.5 text-sm text-muted">
           {{ order.customerName || order.customerWaId }} · {{ formatDateTime(order.createdAt) }}
         </p>
       </div>
-      <select class="field order-status" :value="order.status" @change="onStatusChange">
-        <option v-for="status in STATUSES" :key="status" :value="status">
-          {{ status }}
-        </option>
-      </select>
-    </header>
+      <USelect
+        v-model="status"
+        :items="STATUS_ITEMS"
+        :loading="updating"
+        class="w-36"
+      />
+    </div>
 
-    <ul class="order-items">
-      <li v-for="item in order.items" :key="`${item.orderId}-${item.productName}`" class="order-item">
+    <ul class="mt-4">
+      <li
+        v-for="item in order.items"
+        :key="`${item.orderId}-${item.productName}`"
+        class="flex justify-between border-b border-dashed border-default py-2 text-sm last:border-b-0"
+      >
         <span>{{ item.quantity }} × {{ item.productName }}</span>
         <span>{{ formatPrice(item.priceCents * item.quantity, order.currency) }}</span>
       </li>
     </ul>
 
-    <footer class="order-total">
+    <div class="mt-2 flex justify-between border-t border-default pt-3 font-bold">
       <span>Total</span>
       <span>{{ formatPrice(order.totalCents, order.currency) }}</span>
-    </footer>
-  </article>
+    </div>
+  </UCard>
 </template>
-
-<style scoped>
-.order-card {
-  padding: 1.1rem 1.3rem;
-}
-
-.order-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.8rem;
-}
-
-.order-id {
-  font-size: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-}
-
-.order-meta {
-  margin: 0.15rem 0 0;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.order-status {
-  width: auto;
-}
-
-.order-items {
-  list-style: none;
-  margin: 0.9rem 0 0;
-  padding: 0;
-}
-
-.order-item {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.4rem 0;
-  border-bottom: 1px dashed var(--border);
-  font-size: 0.92rem;
-}
-
-.order-total {
-  display: flex;
-  justify-content: space-between;
-  padding-top: 0.55rem;
-  font-weight: 700;
-}
-</style>

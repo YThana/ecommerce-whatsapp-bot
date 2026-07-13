@@ -14,7 +14,7 @@ const emit = defineEmits<{
 const form = reactive({
   name: props.product?.name ?? '',
   description: props.product?.description ?? '',
-  price: props.product ? (props.product.priceCents / 100).toFixed(2) : '',
+  price: props.product ? props.product.priceCents / 100 : 0,
   currency: props.product?.currency ?? 'USD',
   stock: props.product?.stock ?? 0,
   imageUrl: props.product?.imageUrl ?? '',
@@ -53,78 +53,49 @@ async function submit() {
 </script>
 
 <template>
-  <form class="card product-form" @submit.prevent="submit">
-    <h2 class="product-form-title">
-      {{ product ? `Edit “${product.name}”` : 'New product' }}
-    </h2>
+  <UCard class="mb-6">
+    <template #header>
+      <h2 class="font-semibold">
+        {{ product ? `Edit “${product.name}”` : 'New product' }}
+      </h2>
+    </template>
 
-    <div class="product-form-grid">
-      <div class="product-form-span">
-        <label class="label" for="pf-name">Name</label>
-        <input id="pf-name" v-model="form.name" class="field" required maxlength="200">
-      </div>
-      <div class="product-form-span">
-        <label class="label" for="pf-description">Description</label>
-        <textarea id="pf-description" v-model="form.description" class="field" rows="2" maxlength="2000" />
-      </div>
-      <div>
-        <label class="label" for="pf-price">Price</label>
-        <input id="pf-price" v-model="form.price" class="field" type="number" min="0" step="0.01" required>
-      </div>
-      <div>
-        <label class="label" for="pf-currency">Currency</label>
-        <input id="pf-currency" v-model="form.currency" class="field" maxlength="3" minlength="3" required>
-      </div>
-      <div>
-        <label class="label" for="pf-stock">Stock</label>
-        <input id="pf-stock" v-model.number="form.stock" class="field" type="number" min="0" step="1" required>
-      </div>
-      <div>
-        <label class="label" for="pf-image">Image URL (optional)</label>
-        <input id="pf-image" v-model="form.imageUrl" class="field" type="url" placeholder="https://…">
-      </div>
-    </div>
+    <form class="space-y-4" @submit.prevent="submit">
+      <UFormField label="Name" name="name" required>
+        <UInput v-model="form.name" required maxlength="200" class="w-full" />
+      </UFormField>
 
-    <p v-if="error" class="error-text">
-      {{ error }}
-    </p>
+      <UFormField label="Description" name="description">
+        <UTextarea v-model="form.description" :rows="2" maxlength="2000" class="w-full" />
+      </UFormField>
 
-    <div class="product-form-actions">
-      <button class="btn" type="button" @click="emit('cancel')">
-        Cancel
-      </button>
-      <button class="btn btn-primary" type="submit" :disabled="saving">
-        {{ saving ? 'Saving…' : 'Save product' }}
-      </button>
-    </div>
-  </form>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <UFormField label="Price" name="price" required>
+          <UInputNumber v-model="form.price" :min="0" :step="0.01" class="w-full" />
+        </UFormField>
+        <UFormField label="Currency" name="currency" required>
+          <UInput v-model="form.currency" maxlength="3" minlength="3" required class="w-full" />
+        </UFormField>
+        <UFormField label="Stock" name="stock" required>
+          <UInputNumber v-model="form.stock" :min="0" :step="1" class="w-full" />
+        </UFormField>
+        <UFormField label="Image URL" name="imageUrl">
+          <UInput v-model="form.imageUrl" type="url" placeholder="https://…" class="w-full" />
+        </UFormField>
+      </div>
+
+      <UAlert
+        v-if="error"
+        color="error"
+        variant="subtle"
+        :title="error"
+        icon="i-lucide-circle-alert"
+      />
+
+      <div class="flex justify-end gap-2">
+        <UButton label="Cancel" color="neutral" variant="ghost" @click="emit('cancel')" />
+        <UButton type="submit" label="Save product" :loading="saving" />
+      </div>
+    </form>
+  </UCard>
 </template>
-
-<style scoped>
-.product-form {
-  padding: 1.3rem;
-  margin-bottom: 1.2rem;
-}
-
-.product-form-title {
-  font-size: 1.02rem;
-  margin-bottom: 1rem;
-}
-
-.product-form-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 0.8rem;
-}
-
-.product-form-span {
-  grid-column: 1 / -1;
-}
-
-.product-form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.6rem;
-  margin-top: 1rem;
-}
-</style>

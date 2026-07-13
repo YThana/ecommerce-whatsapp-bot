@@ -4,7 +4,7 @@ import { shallowRef } from 'vue'
 
 definePageMeta({ layout: 'admin', middleware: 'admin' })
 
-const { data: products, refresh } = await useFetch<Product[]>('/api/admin/products')
+const { data: products, status, refresh } = useFetch<Product[]>('/api/admin/products', { lazy: true })
 
 const editing = shallowRef<Product | null>(null)
 const showForm = shallowRef(false)
@@ -35,13 +35,11 @@ async function toggleActive(product: Product) {
 
 <template>
   <div>
-    <div class="products-header">
-      <h1 class="page-title products-title">
+    <div class="mb-6 flex items-center justify-between">
+      <h1 class="text-2xl font-bold">
         Products
       </h1>
-      <button class="btn btn-primary" type="button" @click="openCreate">
-        + Add product
-      </button>
+      <UButton icon="i-lucide-plus" label="Add product" @click="openCreate" />
     </div>
 
     <AdminProductForm
@@ -52,93 +50,66 @@ async function toggleActive(product: Product) {
       @cancel="showForm = false"
     />
 
-    <div class="card table-wrap">
-      <table class="table">
+    <div v-if="status === 'pending'" class="space-y-3">
+      <USkeleton v-for="i in 5" :key="i" class="h-16 rounded-lg" />
+    </div>
+
+    <UCard v-else :ui="{ body: 'p-0 sm:p-0' }">
+      <table class="w-full text-sm">
         <thead>
-          <tr>
-            <th>Product</th>
-            <th>Price</th>
-            <th>Stock</th>
-            <th>Status</th>
-            <th />
+          <tr class="border-b border-default text-left text-xs uppercase tracking-wide text-muted">
+            <th class="px-4 py-3 font-medium">Product</th>
+            <th class="px-4 py-3 font-medium">Price</th>
+            <th class="px-4 py-3 font-medium">Stock</th>
+            <th class="px-4 py-3 font-medium">Status</th>
+            <th class="px-4 py-3" />
           </tr>
         </thead>
         <tbody>
-          <tr v-for="product in products" :key="product.id">
-            <td>
-              <p class="product-name">{{ product.name }}</p>
-              <p class="product-description">{{ product.description }}</p>
+          <tr
+            v-for="product in products"
+            :key="product.id"
+            class="border-b border-default last:border-b-0 hover:bg-elevated/50"
+          >
+            <td class="px-4 py-3">
+              <p class="font-medium">{{ product.name }}</p>
+              <p class="max-w-md truncate text-xs text-muted">{{ product.description }}</p>
             </td>
-            <td>{{ formatPrice(product.priceCents, product.currency) }}</td>
-            <td>{{ product.stock }}</td>
-            <td>
-              <span class="badge" :class="product.active ? 'badge-delivered' : 'badge-muted'">
-                {{ product.active ? 'active' : 'hidden' }}
-              </span>
+            <td class="px-4 py-3 whitespace-nowrap">{{ formatPrice(product.priceCents, product.currency) }}</td>
+            <td class="px-4 py-3">{{ product.stock }}</td>
+            <td class="px-4 py-3">
+              <UBadge
+                :color="product.active ? 'success' : 'neutral'"
+                variant="subtle"
+                :label="product.active ? 'active' : 'hidden'"
+              />
             </td>
-            <td class="product-actions">
-              <button class="btn" type="button" @click="openEdit(product)">
-                Edit
-              </button>
-              <button class="btn" type="button" @click="toggleActive(product)">
-                {{ product.active ? 'Hide' : 'Show' }}
-              </button>
+            <td class="px-4 py-3 text-right whitespace-nowrap">
+              <UButton
+                icon="i-lucide-pencil"
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                label="Edit"
+                @click="openEdit(product)"
+              />
+              <UButton
+                :icon="product.active ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                :label="product.active ? 'Hide' : 'Show'"
+                @click="toggleActive(product)"
+              />
             </td>
           </tr>
           <tr v-if="products && products.length === 0">
-            <td colspan="5" class="products-empty">
+            <td colspan="5" class="px-4 py-10 text-center text-muted">
               No products yet — add your first one.
             </td>
           </tr>
         </tbody>
       </table>
-    </div>
+    </UCard>
   </div>
 </template>
-
-<style scoped>
-.products-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1.25rem;
-}
-
-.products-title {
-  margin-bottom: 0;
-}
-
-.table-wrap {
-  overflow-x: auto;
-}
-
-.product-name {
-  margin: 0;
-  font-weight: 600;
-}
-
-.product-description {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.83rem;
-  max-width: 420px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.product-actions {
-  white-space: nowrap;
-  text-align: right;
-}
-
-.product-actions .btn {
-  margin-left: 0.4rem;
-}
-
-.products-empty {
-  text-align: center;
-  color: var(--muted);
-  padding: 2rem;
-}
-</style>

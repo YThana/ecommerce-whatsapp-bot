@@ -16,6 +16,7 @@
   "dependencies": {
     "@ai-sdk/google": "^4.0.12",
     "@neondatabase/serverless": "^1.1.0",
+    "@nuxt/ui": "^4.9.0",
     "ai": "^7.0.22",
     "drizzle-orm": "^0.45.2",
     "nuxt": "^4.4.8",
@@ -24,6 +25,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@iconify-json/lucide": "^1.2.117",
     "@types/node": "^26.1.1",
     "drizzle-kit": "^0.31.10",
     "tsx": "^4.23.0",

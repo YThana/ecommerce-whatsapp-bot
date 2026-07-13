@@ -3,6 +3,8 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
 
+  modules: ['@nuxt/ui'],
+
   vite: {
     server: {
       // Let webhook tunnels reach the dev server (dev only; unused in production)
