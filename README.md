@@ -13,7 +13,7 @@ Customer ──▶ WhatsApp ──▶ Meta Cloud API ──webhook──▶ Nuxt
 Customer ◀── WhatsApp ◀── Meta Cloud API ◀── reply ───────┘
 ```
 
-- **Nuxt 4** — the Nitro server handles Meta's webhooks; the Vue app is room for an admin dashboard.
+- **Nuxt 4** — the Nitro server handles Meta's webhooks; the Vue app is a password-protected admin dashboard (`/admin`) with product management, order tracking and a conversation viewer.
 - **Vercel AI SDK + Gemini** — the agent decides when to search products, manage the cart or place orders via typed tools.
 - **Neon Postgres + Drizzle** — products, customers, conversation history, carts and orders.
 
@@ -52,6 +52,10 @@ Expose port 3000 with a tunnel (e.g. `ngrok http 3000`), then in the Meta app da
 - Subscribe to the **messages** webhook field
 
 Send a WhatsApp message to your test number and the bot replies.
+
+### 5. Admin dashboard
+
+Open `http://localhost:3000/admin` and sign in with `NUXT_ADMIN_PASSWORD`. From there you can manage the catalog, update order statuses and read customer conversations. (`NUXT_SESSION_PASSWORD` must be set to any random 32+ character string — it seals the session cookie.)
 
 ## Troubleshooting
 

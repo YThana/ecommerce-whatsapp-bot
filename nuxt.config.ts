@@ -10,11 +10,23 @@ export default defineNuxtConfig({
     },
   },
 
+  css: ['~/assets/css/main.css'],
+
+  routeRules: {
+    '/': { redirect: '/admin' },
+    // The admin is a client-rendered app behind cookie auth — no SSR needed
+    '/admin': { ssr: false },
+    '/admin/**': { ssr: false },
+  },
+
   runtimeConfig: {
     // Overridden by NUXT_WHATSAPP_* environment variables
     whatsappAccessToken: '',
     whatsappPhoneNumberId: '',
     whatsappVerifyToken: '',
     whatsappAppSecret: '',
+    // Admin dashboard auth
+    adminPassword: '',
+    sessionPassword: '',
   },
 })
