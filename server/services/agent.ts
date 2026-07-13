@@ -202,7 +202,7 @@ function buildTools(customerId: number) {
  */
 export async function generateReply(customerId: number, conversation: ModelMessage[]) {
   const result = await generateText({
-    model: google('gemini-2.5-flash'),
+    model: google('gemini-3.5-flash'),
     system: SYSTEM_PROMPT,
     messages: conversation,
     tools: buildTools(customerId),
