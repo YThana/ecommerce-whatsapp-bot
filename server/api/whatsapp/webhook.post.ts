@@ -44,8 +44,13 @@ export default defineEventHandler(async (event) => {
 async function handleMessage(message: WhatsAppTextMessage, contactName: string | undefined) {
   console.log('[webhook] message %s from %s (type: %s)', message.id, message.from, message.type)
 
+  // Fire immediately so the customer sees the blue ticks and typing indicator
+  // right away; it runs in parallel with the work below (and never throws)
+  const readReceipt = markAsRead(message.id)
+
   if (message.type !== 'text' || !message.text?.body) {
     await sendTextMessage(message.from, 'Sorry, I can only read text messages for now 🙏')
+    await readReceipt
     return
   }
 
@@ -69,10 +74,9 @@ async function handleMessage(message: WhatsAppTextMessage, contactName: string |
     .returning({ id: messages.id })
   if (inserted.length === 0) {
     console.log('[webhook] duplicate delivery of %s, skipping', message.id)
+    await readReceipt
     return
   }
-
-  await markAsRead(message.id)
 
   const history = await db.select({ role: messages.role, content: messages.content })
     .from(messages)
@@ -94,4 +98,5 @@ async function handleMessage(message: WhatsAppTextMessage, contactName: string |
   })
   await sendTextMessage(message.from, reply)
   console.log('[webhook] reply delivered to %s', message.from)
+  await readReceipt
 }
