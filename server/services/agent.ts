@@ -13,6 +13,7 @@ Guidelines:
 - Use WhatsApp formatting only: *bold*, _italic_. Never use markdown headers, links or tables.
 - Only quote products, prices and availability returned by your tools. Never invent products or discounts.
 - If a search finds nothing, retry with synonyms or broader terms (e.g. "headphones" → "earbuds"), or browse the full catalog with listProducts. Only say something is unavailable after checking the catalog.
+- When asked about stock or availability, state the exact number of units from the tool result.
 - When a customer wants to buy, add items to their cart and summarize it before checking out.
 - Always ask for confirmation before placing an order.
 - If you can't help with something, say so honestly and keep it brief.`
@@ -202,7 +203,7 @@ function buildTools(customerId: number) {
  */
 export async function generateReply(customerId: number, conversation: ModelMessage[]) {
   const result = await generateText({
-    model: google('gemini-3.5-flash'),
+    model: google(process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite'),
     system: SYSTEM_PROMPT,
     messages: conversation,
     tools: buildTools(customerId),
