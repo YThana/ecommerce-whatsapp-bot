@@ -48,21 +48,48 @@ fi
 # locally, then registers the URL (Meta re-verifies it over the tunnel).
 if [ -n "$APP_ID" ] && [ -n "$APP_SECRET" ] && [ -n "$VERIFY_TOKEN" ] && [ -n "$URL" ]; then
   (
+    HANDSHAKE="/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=$VERIFY_TOKEN&hub.challenge=ready"
+
+    # 1. Wait for the dev server to answer locally
     for _ in $(seq 1 60); do
-      READY=$(curl -s -m 5 "http://localhost:$PORT/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=$VERIFY_TOKEN&hub.challenge=ready" 2>/dev/null)
+      READY=$(curl -s -m 5 "http://localhost:$PORT$HANDSHAKE" 2>/dev/null)
       [ "$READY" = "ready" ] && break
       sleep 2
     done
-    RESULT=$(curl -s -m 30 -X POST "https://graph.facebook.com/v23.0/$APP_ID/subscriptions" \
-      --data-urlencode "object=whatsapp_business_account" \
-      --data-urlencode "callback_url=$URL/api/whatsapp/webhook" \
-      --data-urlencode "verify_token=$VERIFY_TOKEN" \
-      --data-urlencode "fields=messages" \
-      --data-urlencode "access_token=$APP_ID|$APP_SECRET")
-    case "$RESULT" in
-      *'"success":true'*) echo "✔ Meta callback URL set to $URL/api/whatsapp/webhook" ;;
-      *) echo "✖ Could not update Meta callback URL automatically: $RESULT" ;;
-    esac
+
+    # 2. Wait until the tunnel hostname is publicly reachable — fresh
+    # trycloudflare URLs need time for DNS to propagate
+    PUBLIC_OK=""
+    for _ in $(seq 1 24); do
+      PUB=$(curl -s -m 10 "$URL$HANDSHAKE" 2>/dev/null)
+      if [ "$PUB" = "ready" ]; then
+        PUBLIC_OK=1
+        break
+      fi
+      sleep 5
+    done
+    if [ -z "$PUBLIC_OK" ]; then
+      echo "✖ Tunnel $URL never became publicly reachable — update the Meta callback URL manually."
+      exit 1
+    fi
+
+    # 3. Register with Meta; retry since Meta's DNS may lag ours by a bit
+    for _ in 1 2 3 4; do
+      RESULT=$(curl -s -m 30 -X POST "https://graph.facebook.com/v23.0/$APP_ID/subscriptions" \
+        --data-urlencode "object=whatsapp_business_account" \
+        --data-urlencode "callback_url=$URL/api/whatsapp/webhook" \
+        --data-urlencode "verify_token=$VERIFY_TOKEN" \
+        --data-urlencode "fields=messages" \
+        --data-urlencode "access_token=$APP_ID|$APP_SECRET")
+      case "$RESULT" in
+        *'"success":true'*)
+          echo "✔ Meta callback URL set to $URL/api/whatsapp/webhook"
+          exit 0
+          ;;
+      esac
+      sleep 10
+    done
+    echo "✖ Could not update Meta callback URL after 4 attempts: $RESULT"
   ) &
 else
   echo "⚠ Missing META_APP_ID / app secret / verify token in .env —"
