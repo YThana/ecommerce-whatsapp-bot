@@ -6,12 +6,22 @@ const GRAPH_API_URL = 'https://graph.facebook.com/v23.0'
 // WhatsApp rejects text messages longer than 4096 characters
 const MAX_TEXT_LENGTH = 4096
 
-export interface WhatsAppTextMessage {
+export interface WhatsAppIncomingMessage {
   from: string
   id: string
   type: string
   text?: { body: string }
+  interactive?: {
+    type: string
+    button_reply?: { id: string, title: string }
+    list_reply?: { id: string, title: string, description?: string }
+  }
 }
+
+/** An interactive message queued by the agent, sent after the turn completes. */
+export type OutgoingInteractive =
+  | { kind: 'buttons', text: string, buttons: { id: string, title: string }[] }
+  | { kind: 'list', text: string, buttonLabel: string, items: { id: string, title: string, description?: string }[] }
 
 export interface WhatsAppWebhookPayload {
   object: string
@@ -20,7 +30,7 @@ export interface WhatsAppWebhookPayload {
       field: string
       value: {
         contacts?: { wa_id: string, profile?: { name?: string } }[]
-        messages?: WhatsAppTextMessage[]
+        messages?: WhatsAppIncomingMessage[]
       }
     }[]
   }[]
@@ -63,6 +73,51 @@ export async function sendTextMessage(to: string, text: string) {
     // Surface the Graph API error payload — it names the exact cause
     // (expired token, recipient not in allowed list, 24h window, …)
     console.error('[whatsapp] send failed:', JSON.stringify(error?.data ?? String(error)))
+    throw error
+  }
+}
+
+// WhatsApp's hard limits for interactive messages
+const clip = (value: string, max: number) => (value.length > max ? `${value.slice(0, max - 1)}…` : value)
+
+export async function sendInteractive(to: string, message: OutgoingInteractive) {
+  const interactive = message.kind === 'buttons'
+    ? {
+        type: 'button',
+        body: { text: clip(message.text, 1024) },
+        action: {
+          buttons: message.buttons.slice(0, 3).map(button => ({
+            type: 'reply',
+            reply: { id: clip(button.id, 200), title: clip(button.title, 20) },
+          })),
+        },
+      }
+    : {
+        type: 'list',
+        body: { text: clip(message.text, 1024) },
+        action: {
+          button: clip(message.buttonLabel, 20),
+          sections: [{
+            rows: message.items.slice(0, 10).map(item => ({
+              id: clip(item.id, 200),
+              title: clip(item.title, 24),
+              ...(item.description ? { description: clip(item.description, 72) } : {}),
+            })),
+          }],
+        },
+      }
+
+  try {
+    await callGraphApi('messages', {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to,
+      type: 'interactive',
+      interactive,
+    })
+  }
+  catch (error: any) {
+    console.error('[whatsapp] interactive send failed:', JSON.stringify(error?.data ?? String(error)))
     throw error
   }
 }

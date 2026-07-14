@@ -1,10 +1,10 @@
 import type { ModelMessage } from 'ai'
-import type { WhatsAppTextMessage, WhatsAppWebhookPayload } from '../../services/whatsapp'
+import type { OutgoingInteractive, WhatsAppIncomingMessage, WhatsAppWebhookPayload } from '../../services/whatsapp'
 import { asc, eq } from 'drizzle-orm'
 import { useDb } from '../../db'
 import { customers, messages } from '../../db/schema'
 import { generateReply } from '../../services/agent'
-import { markAsRead, sendTextMessage, verifyWebhookSignature } from '../../services/whatsapp'
+import { markAsRead, sendInteractive, sendTextMessage, verifyWebhookSignature } from '../../services/whatsapp'
 
 // How much recent conversation the agent sees per turn
 const HISTORY_LIMIT = 20
@@ -41,14 +41,37 @@ export default defineEventHandler(async (event) => {
   return { received: true }
 })
 
-async function handleMessage(message: WhatsAppTextMessage, contactName: string | undefined) {
+/** What the agent should read as the customer's words, for text or a tapped option. */
+function extractUserContent(message: WhatsAppIncomingMessage): string | null {
+  if (message.type === 'text' && message.text?.body) {
+    return message.text.body
+  }
+  if (message.type === 'interactive') {
+    const reply = message.interactive?.button_reply ?? message.interactive?.list_reply
+    if (reply) {
+      return `[Selected: ${reply.title} (id: ${reply.id})]`
+    }
+  }
+  return null
+}
+
+/** How an interactive message is recorded in history so the model remembers what it offered. */
+function describeInteractive(message: OutgoingInteractive) {
+  if (message.kind === 'buttons') {
+    return `${message.text}\n[Buttons: ${message.buttons.map(button => button.title).join(' | ')}]`
+  }
+  return `${message.text}\n[Menu "${message.buttonLabel}": ${message.items.map(item => item.title).join(' | ')}]`
+}
+
+async function handleMessage(message: WhatsAppIncomingMessage, contactName: string | undefined) {
   console.log('[webhook] message %s from %s (type: %s)', message.id, message.from, message.type)
 
   // Fire immediately so the customer sees the blue ticks and typing indicator
   // right away; it runs in parallel with the work below (and never throws)
   const readReceipt = markAsRead(message.id)
 
-  if (message.type !== 'text' || !message.text?.body) {
+  const userContent = extractUserContent(message)
+  if (!userContent) {
     await sendTextMessage(message.from, 'Sorry, I can only read text messages for now 🙏')
     await readReceipt
     return
@@ -67,7 +90,7 @@ async function handleMessage(message: WhatsAppTextMessage, contactName: string |
     .values({
       customerId: customer!.id,
       role: 'user',
-      content: message.text.body,
+      content: userContent,
       waMessageId: message.id,
     })
     .onConflictDoNothing({ target: messages.waMessageId })
@@ -89,14 +112,23 @@ async function handleMessage(message: WhatsAppTextMessage, contactName: string |
     history.map(row => ({ role: row.role, content: row.content }) satisfies ModelMessage),
   )
 
-  console.log('[agent] reply for %s: %s', message.from, reply)
+  const historyContent = [
+    ...(reply.text ? [reply.text] : []),
+    ...reply.interactive.map(describeInteractive),
+  ].join('\n')
+  console.log('[agent] reply for %s: %s', message.from, historyContent)
 
   await db.insert(messages).values({
     customerId: customer!.id,
     role: 'assistant',
-    content: reply,
+    content: historyContent,
   })
-  await sendTextMessage(message.from, reply)
+  if (reply.text) {
+    await sendTextMessage(message.from, reply.text)
+  }
+  for (const interactive of reply.interactive) {
+    await sendInteractive(message.from, interactive)
+  }
   console.log('[webhook] reply delivered to %s', message.from)
   await readReceipt
 }
