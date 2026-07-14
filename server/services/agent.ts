@@ -250,29 +250,68 @@ function slugify(title: string) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
+function stripQuotes(value: string) {
+  return value.trim().replace(/^["'“]+|["'”]+$/g, '')
+}
+
 /**
- * Small models sometimes imitate the "[Buttons: A | B]" history markers as
- * literal text instead of calling the tool. Turn that mimicry into real
- * interactive messages instead of showing customers the raw marker.
+ * Small models sometimes imitate the "[Buttons: A | B]" / [Menu "…": a | b]
+ * history markers as literal text instead of calling the tool. Turn that
+ * mimicry into real interactive messages, and never let a raw marker
+ * reach the customer.
  */
-function extractMarkerButtons(text: string, queue: OutgoingInteractive[]) {
-  const match = text.match(/\n?\[Buttons?:\s*([^\]]+)\]/i)
-  if (!match) {
-    return text
+export function extractMarkerInteractive(text: string, queue: OutgoingInteractive[]) {
+  const parsed: OutgoingInteractive[] = []
+
+  const buttonMatch = text.match(/\[Buttons?:\s*([^\]]+)\]/i)
+  if (buttonMatch) {
+    const titles = buttonMatch[1]!.split(/\s*[|/·]\s*/)
+      .map(stripQuotes)
+      .filter(Boolean)
+      .slice(0, 3)
+    if (titles.length > 0) {
+      parsed.push({
+        kind: 'buttons',
+        text: '',
+        buttons: titles.map(title => ({ id: slugify(title), title })),
+      })
+    }
   }
-  const titles = match[1]!.split(/\s*[|/·]\s*/)
-    .map(title => title.trim().replace(/^["'“]+|["'”]+$/g, ''))
-    .filter(Boolean)
-    .slice(0, 3)
-  if (titles.length > 0) {
-    queue.push({
-      kind: 'buttons',
-      text: text.replace(match[0], '').trim() || 'Choose an option:',
-      buttons: titles.map(title => ({ id: slugify(title), title })),
-    })
-    return ''
+
+  const menuMatch = text.match(/\[Menu\s*(?:["“']([^"”']*)["”'])?\s*:?\s*([^\]]+)\]/i)
+  if (menuMatch) {
+    const items = menuMatch[2]!.split(/\s*[|·]\s*/)
+      .map(stripQuotes)
+      .filter(Boolean)
+      .slice(0, 10)
+      .map((raw) => {
+        // "Smart Watch S2 ($129.99)" → title + price as the description line
+        const withPrice = raw.match(/^(.*?)\s*\(([^)]+)\)$/)
+        const title = (withPrice ? withPrice[1]! : raw).trim()
+        return { id: slugify(title), title, ...(withPrice ? { description: withPrice[2]!.trim() } : {}) }
+      })
+    if (items.length > 0) {
+      parsed.push({
+        kind: 'list',
+        text: '',
+        buttonLabel: stripQuotes(menuMatch[1] ?? '') || 'View options',
+        items,
+      })
+    }
   }
-  return text
+
+  // Strip every marker, parsed or not — customers must never see raw markers
+  const body = text.replace(/\[(?:Buttons?|Menu)[^\]]*\]/gi, '').trim()
+  if (parsed.length === 0) {
+    return body
+  }
+  for (const [index, message] of parsed.entries()) {
+    message.text = index === 0 && body
+      ? body
+      : (message.kind === 'list' ? 'Here are the options:' : 'Choose an option:')
+  }
+  queue.push(...parsed)
+  return ''
 }
 
 /**
@@ -304,7 +343,7 @@ export async function generateReply(customerId: number, conversation: ModelMessa
     text = ''
   }
   else {
-    text = extractMarkerButtons(text, queue)
+    text = extractMarkerInteractive(text, queue)
   }
   if (!text && queue.length === 0) {
     return { text: 'Sorry, I had trouble answering that. Could you rephrase?', interactive: [] }
