@@ -62,6 +62,8 @@ pnpm db:seed   # add sample products
 
 Watch for `✔ Meta callback URL set to …` in the terminal — once it appears, messages flow. Ctrl-C stops the dev server; the tunnel keeps running in the background on purpose.
 
+**Windows one-click:** double-click `start-bot.bat` (runs `start-bot.ps1`). Same behavior — the dev server opens in its own window while the launcher window shows tunnel + Meta sync status. Requires [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) on your `PATH` (`winget install Cloudflare.cloudflared`).
+
 **Manual alternative:**
 
 ```bash
@@ -124,6 +126,7 @@ Deploys to [Vercel](https://vercel.com/) out of the box — import the repo, add
 | Command             | Description                                        |
 | ------------------- | -------------------------------------------------- |
 | `start-bot.command` | macOS: tunnel + dev server + Meta callback sync    |
+| `start-bot.bat`     | Windows: tunnel + dev server + Meta callback sync  |
 | `pnpm dev`          | Start the dev server                               |
 | `pnpm build`        | Build for production                               |
 | `pnpm typecheck`    | Type-check the project                             |
