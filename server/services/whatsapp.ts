@@ -16,12 +16,15 @@ export interface WhatsAppIncomingMessage {
     button_reply?: { id: string, title: string }
     list_reply?: { id: string, title: string, description?: string }
   }
+  // Quick-reply taps (e.g. from media carousels) can arrive as type "button"
+  button?: { payload?: string, text?: string }
 }
 
 /** An interactive message queued by the agent, sent after the turn completes. */
 export type OutgoingInteractive =
   | { kind: 'buttons', text: string, buttons: { id: string, title: string }[], imageUrl?: string }
   | { kind: 'list', text: string, buttonLabel: string, items: { id: string, title: string, description?: string }[] }
+  | { kind: 'carousel', text: string, cards: { imageUrl: string, text: string, buttons: { id: string, title: string }[] }[] }
 
 export interface WhatsAppWebhookPayload {
   object: string
@@ -80,7 +83,46 @@ export async function sendTextMessage(to: string, text: string) {
 // WhatsApp's hard limits for interactive messages
 const clip = (value: string, max: number) => (value.length > max ? `${value.slice(0, max - 1)}…` : value)
 
+function buildCarousel(message: Extract<OutgoingInteractive, { kind: 'carousel' }>) {
+  return {
+    type: 'carousel',
+    body: { text: clip(message.text, 1024) },
+    action: {
+      // WhatsApp requires 2-10 cards with identical button layouts
+      cards: message.cards.slice(0, 10).map((card, index) => ({
+        card_index: index,
+        type: 'cta_url',
+        header: { type: 'image', image: { link: card.imageUrl } },
+        body: { text: clip(card.text, 160) },
+        action: {
+          buttons: card.buttons.slice(0, 2).map(button => ({
+            type: 'quick_reply',
+            quick_reply: { id: clip(button.id, 200), title: clip(button.title, 20) },
+          })),
+        },
+      })),
+    },
+  }
+}
+
 export async function sendInteractive(to: string, message: OutgoingInteractive) {
+  if (message.kind === 'carousel') {
+    try {
+      await callGraphApi('messages', {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to,
+        type: 'interactive',
+        interactive: buildCarousel(message),
+      })
+      return
+    }
+    catch (error: any) {
+      console.error('[whatsapp] carousel send failed:', JSON.stringify(error?.data ?? String(error)))
+      throw error
+    }
+  }
+
   const interactive = message.kind === 'buttons'
     ? {
         type: 'button',

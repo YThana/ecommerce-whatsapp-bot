@@ -52,6 +52,10 @@ function extractUserContent(message: WhatsAppIncomingMessage): string | null {
       return `[Selected: ${reply.title} (id: ${reply.id})]`
     }
   }
+  // Carousel quick-reply taps arrive as a plain "button" message
+  if (message.type === 'button' && message.button?.text) {
+    return `[Selected: ${message.button.text} (id: ${message.button.payload ?? 'unknown'})]`
+  }
   return null
 }
 
@@ -60,6 +64,10 @@ function describeInteractive(message: OutgoingInteractive) {
   if (message.kind === 'buttons') {
     const photo = message.imageUrl ? '[Product photo]\n' : ''
     return `${photo}${message.text}\n[Buttons: ${message.buttons.map(button => button.title).join(' | ')}]`
+  }
+  if (message.kind === 'carousel') {
+    const names = message.cards.map(card => card.text.split('\n')[0]).join(' | ')
+    return `${message.text}\n[Carousel of product cards: ${names}]`
   }
   return `${message.text}\n[Menu "${message.buttonLabel}": ${message.items.map(item => item.title).join(' | ')}]`
 }

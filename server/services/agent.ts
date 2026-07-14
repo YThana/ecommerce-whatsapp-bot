@@ -2,7 +2,7 @@ import type { ModelMessage } from 'ai'
 import type { OutgoingInteractive } from './whatsapp'
 import { google } from '@ai-sdk/google'
 import { generateText, hasToolCall, stepCountIs, tool } from 'ai'
-import { and, desc, eq, or, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { useDb } from '../db'
 import { cartItems, orderItems, orders, products } from '../db/schema'
@@ -21,7 +21,8 @@ Guidelines:
 
 Interactive messages (prefer these — tapping beats typing):
 - When the customer focuses on ONE product (asks about it, taps it in a menu), call showProduct — it sends a photo card with the real price and stock.
-- When presenting 2+ products, call showList with one row per product (id like "product-<id>", price in the description).
+- When presenting 2-10 products, call showProductCarousel — swipeable photo cards beat any text list.
+- Use showList only for choices that aren't products (or more than 10 items).
 - For confirmations and next steps, call offerChoices with up to 3 short buttons (e.g. "Add to cart" / "Checkout" / "Keep browsing"), ids like "add-<productId>" or "checkout".
 - These tools SEND the message themselves — after calling one, do not write any further text.
 - NEVER write markers like [Buttons: …] or [Menu …] in your reply text — those appear in history only as a record. To offer tappable options you must call the offerChoices or showList tool.
@@ -206,10 +207,46 @@ function buildTools(customerId: number) {
   }
 }
 
+function placeholderImage(name: string) {
+  return `https://placehold.co/800x600/0e9f6e/white/jpeg?text=${encodeURIComponent(name)}`
+}
+
 function buildUiTools(queue: OutgoingInteractive[]) {
   const db = useDb()
 
   return {
+    showProductCarousel: tool({
+      description: 'Send 2-10 products as a swipeable carousel of photo cards, each with Add to cart / Details buttons. The BEST way to present multiple products. This sends the message itself — write no further text after calling it.',
+      inputSchema: z.object({
+        text: z.string().max(1024).describe('Message shown above the carousel'),
+        productIds: z.array(z.number().int()).min(2).max(10),
+      }),
+      execute: async ({ text, productIds }) => {
+        const rows = await db.select().from(products)
+          .where(and(eq(products.active, true), inArray(products.id, productIds)))
+        if (rows.length < 2) {
+          return { error: 'Need at least 2 valid products for a carousel — use showProduct or showList instead' }
+        }
+        // Preserve the order the model asked for
+        const ordered = productIds
+          .map(id => rows.find(product => product.id === id))
+          .filter(product => product !== undefined)
+        queue.push({
+          kind: 'carousel',
+          text,
+          cards: ordered.map(product => ({
+            imageUrl: product.imageUrl ?? placeholderImage(product.name),
+            text: `*${product.name}*\n${formatPrice(product.priceCents, product.currency)} · ${product.stock} in stock`,
+            buttons: [
+              { id: `add-${product.id}`, title: 'Add to cart' },
+              { id: `product-${product.id}`, title: 'Details' },
+            ],
+          })),
+        })
+        return { sent: true, shown: ordered.map(product => product.name) }
+      },
+    }),
+
     showProduct: tool({
       description: 'Send a product card — photo, details, price and stock straight from the catalog, with tap buttons. Use whenever the customer focuses on a single product. This sends the message itself — write no further text after calling it.',
       inputSchema: z.object({
@@ -337,7 +374,7 @@ export function extractMarkerInteractive(text: string, queue: OutgoingInteractiv
   }
 
   // Strip every marker, parsed or not — customers must never see raw markers
-  const body = text.replace(/\[(?:Buttons?|Menu)[^\]]*\]/gi, '').trim()
+  const body = text.replace(/\[(?:Buttons?|Menu|Carousel)[^\]]*\]/gi, '').trim()
   if (parsed.length === 0) {
     return body
   }
@@ -362,7 +399,7 @@ export async function generateReply(customerId: number, conversation: ModelMessa
     system: SYSTEM_PROMPT,
     messages: conversation,
     tools: { ...buildTools(customerId), ...buildUiTools(queue) },
-    stopWhen: [stepCountIs(6), hasToolCall('offerChoices'), hasToolCall('showList'), hasToolCall('showProduct')],
+    stopWhen: [stepCountIs(6), hasToolCall('offerChoices'), hasToolCall('showList'), hasToolCall('showProduct'), hasToolCall('showProductCarousel')],
     onStepFinish: process.env.AGENT_DEBUG
       ? step => console.error('[agent:debug]', JSON.stringify({
           finishReason: step.finishReason,
