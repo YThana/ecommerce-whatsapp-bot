@@ -20,7 +20,7 @@ export interface WhatsAppIncomingMessage {
 
 /** An interactive message queued by the agent, sent after the turn completes. */
 export type OutgoingInteractive =
-  | { kind: 'buttons', text: string, buttons: { id: string, title: string }[] }
+  | { kind: 'buttons', text: string, buttons: { id: string, title: string }[], imageUrl?: string }
   | { kind: 'list', text: string, buttonLabel: string, items: { id: string, title: string, description?: string }[] }
 
 export interface WhatsAppWebhookPayload {
@@ -84,6 +84,8 @@ export async function sendInteractive(to: string, message: OutgoingInteractive) 
   const interactive = message.kind === 'buttons'
     ? {
         type: 'button',
+        // An image header turns the message into a product-card style bubble
+        ...(message.imageUrl ? { header: { type: 'image', image: { link: message.imageUrl } } } : {}),
         body: { text: clip(message.text, 1024) },
         action: {
           buttons: message.buttons.slice(0, 3).map(button => ({

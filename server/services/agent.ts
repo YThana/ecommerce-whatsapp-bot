@@ -20,6 +20,7 @@ Guidelines:
 - If you can't help with something, say so honestly and keep it brief.
 
 Interactive messages (prefer these — tapping beats typing):
+- When the customer focuses on ONE product (asks about it, taps it in a menu), call showProduct — it sends a photo card with the real price and stock.
 - When presenting 2+ products, call showList with one row per product (id like "product-<id>", price in the description).
 - For confirmations and next steps, call offerChoices with up to 3 short buttons (e.g. "Add to cart" / "Checkout" / "Keep browsing"), ids like "add-<productId>" or "checkout".
 - These tools SEND the message themselves — after calling one, do not write any further text.
@@ -206,7 +207,42 @@ function buildTools(customerId: number) {
 }
 
 function buildUiTools(queue: OutgoingInteractive[]) {
+  const db = useDb()
+
   return {
+    showProduct: tool({
+      description: 'Send a product card — photo, details, price and stock straight from the catalog, with tap buttons. Use whenever the customer focuses on a single product. This sends the message itself — write no further text after calling it.',
+      inputSchema: z.object({
+        productId: z.number().int(),
+        buttons: z.array(z.object({
+          id: z.string().max(200).describe('e.g. "add-3" or "checkout"'),
+          title: z.string().max(60).describe('Keep within 20 chars'),
+        })).min(1).max(3).optional().describe('Defaults to Add to cart / Keep browsing'),
+      }),
+      execute: async ({ productId, buttons }) => {
+        const [product] = await db.select().from(products)
+          .where(and(eq(products.id, productId), eq(products.active, true)))
+        if (!product) {
+          return { error: 'Product not found' }
+        }
+        const lines = [
+          `*${product.name}*`,
+          ...(product.description ? [product.description] : []),
+          '',
+          `💰 ${formatPrice(product.priceCents, product.currency)} · ${product.stock} in stock`,
+        ]
+        queue.push({
+          kind: 'buttons',
+          text: lines.join('\n'),
+          buttons: buttons ?? [
+            { id: `add-${product.id}`, title: 'Add to cart' },
+            { id: 'browse', title: 'Keep browsing' },
+          ],
+          ...(product.imageUrl ? { imageUrl: product.imageUrl } : {}),
+        })
+        return { sent: true, shown: product.name }
+      },
+    }),
     offerChoices: tool({
       description: 'Send the customer a message with up to 3 tappable reply buttons. Use for confirmations and quick next steps. This sends the message itself — write no further text after calling it.',
       inputSchema: z.object({
@@ -326,7 +362,7 @@ export async function generateReply(customerId: number, conversation: ModelMessa
     system: SYSTEM_PROMPT,
     messages: conversation,
     tools: { ...buildTools(customerId), ...buildUiTools(queue) },
-    stopWhen: [stepCountIs(6), hasToolCall('offerChoices'), hasToolCall('showList')],
+    stopWhen: [stepCountIs(6), hasToolCall('offerChoices'), hasToolCall('showList'), hasToolCall('showProduct')],
     onStepFinish: process.env.AGENT_DEBUG
       ? step => console.error('[agent:debug]', JSON.stringify({
           finishReason: step.finishReason,

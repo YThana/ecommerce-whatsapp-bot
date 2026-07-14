@@ -58,7 +58,8 @@ function extractUserContent(message: WhatsAppIncomingMessage): string | null {
 /** How an interactive message is recorded in history so the model remembers what it offered. */
 function describeInteractive(message: OutgoingInteractive) {
   if (message.kind === 'buttons') {
-    return `${message.text}\n[Buttons: ${message.buttons.map(button => button.title).join(' | ')}]`
+    const photo = message.imageUrl ? '[Product photo]\n' : ''
+    return `${photo}${message.text}\n[Buttons: ${message.buttons.map(button => button.title).join(' | ')}]`
   }
   return `${message.text}\n[Menu "${message.buttonLabel}": ${message.items.map(item => item.title).join(' | ')}]`
 }
