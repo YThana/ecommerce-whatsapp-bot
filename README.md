@@ -20,7 +20,12 @@ Customer ◀── WhatsApp ◀── Meta Cloud API ◀── reply ───�
 ## Features
 
 - 🤖 AI sales agent with fuzzy product search, cart, checkout and order tracking — replies in WhatsApp formatting with instant read receipts and a typing indicator
-- 🛠️ Admin dashboard: catalog CRUD, order status management, WhatsApp-style conversation viewer, dark mode
+- 🛒 Rich in-chat shopping UI, no Meta commerce catalog required:
+  - **Product carousels** — 2–10 swipeable image cards, each with *Add to cart* / *Details* buttons
+  - **Product cards** — photo header + live price/stock from the database + tap buttons
+  - **List menus & reply buttons** — tappable options for browsing and confirmations
+  - The agent picks the right format per situation; taps come back as structured selections, so a customer can complete a whole purchase without typing
+- 🛠️ Admin dashboard: catalog CRUD (incl. product image URLs), order status management, WhatsApp-style conversation viewer, dark mode
 - 🔁 Webhook dedupe (Meta redeliveries), signature verification, and per-stage pipeline logging
 - 🚇 One-click dev startup on macOS that keeps the Meta callback URL in sync with your tunnel
 
@@ -48,7 +53,14 @@ pnpm db:seed   # add sample products
 
 ### 4. Run and connect the webhook
 
-**macOS one-click:** double-click `start-bot.command`. It starts (or reuses) a [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) quick tunnel, launches the dev server, waits for the tunnel's DNS to propagate, and registers the callback URL with Meta automatically (uses `META_APP_ID` + app secret from `.env`).
+**macOS one-click:** double-click `start-bot.command`. It:
+
+1. starts a [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) quick tunnel — or reuses the running one so the URL (and Meta config) stays stable,
+2. launches the dev server on port 3000,
+3. waits until the tunnel URL is publicly reachable (fresh trycloudflare hostnames need time for DNS to propagate), then
+4. registers the callback URL with Meta automatically, with retries (uses `META_APP_ID` + `NUXT_WHATSAPP_APP_SECRET` + `NUXT_WHATSAPP_VERIFY_TOKEN` from `.env`).
+
+Watch for `✔ Meta callback URL set to …` in the terminal — once it appears, messages flow. Ctrl-C stops the dev server; the tunnel keeps running in the background on purpose.
 
 **Manual alternative:**
 
@@ -67,6 +79,10 @@ Either way, also make sure your app is subscribed to your WABA (see [Troubleshoo
 ### 5. Admin dashboard
 
 Open `http://localhost:3000/admin` and sign in with `NUXT_ADMIN_PASSWORD`. From there you can manage the catalog, update order statuses and read customer conversations. (`NUXT_SESSION_PASSWORD` must be set to any random 32+ character string — it seals the session cookie.)
+
+### 6. Product images
+
+Carousels and product cards show each product's `Image URL` (admin → Products → Edit). The URL must be a **direct, publicly reachable image** (no redirects — Meta's servers fetch it). Seeded products come with generated placeholder images so the visual flow works out of the box.
 
 ## Troubleshooting
 
